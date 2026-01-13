@@ -115,4 +115,4 @@ st.line_chart(trend_df.set_index("Time"))
 st.markdown("---")
 
 if st.button("🔄 Simulate Real-Time Update"):
-    st.experimental_rerun()
+    st.rerun()

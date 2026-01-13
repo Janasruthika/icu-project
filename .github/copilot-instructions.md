@@ -97,27 +97,34 @@ Install: `pip install -r requirements.txt`
 ## Development Workflow
 
 ### Initial Setup
-1. Ensure MIMIC-III CSV files are in `data/`
-2. `pip install -r requirements.txt`
-3. Run steps 1-5 sequentially
+1. Ensure MIMIC-III CSV files are in `data/` (CHARTEVENTS.csv, D_ITEMS.csv, ICUSTAYS.csv)
+2. Install dependencies: `pip install -r requirements.txt`
+3. Run pipeline steps 1-5 sequentially to generate artifacts
+4. Verify `icu_rf_model.pkl` exists before launching dashboard
+
+### Quick Start After Setup
+If artifacts already exist (icu_vitals_raw.csv, icu_ml_dataset.csv, icu_rf_model.pkl):
+```bash
+streamlit run dashboard.py  # Launch immediately
+```
+
+### Full Pipeline Execution
+Run all steps in sequence when starting fresh or after data changes:
+```bash
+python step1_find_vital_ids.py      # Manual: identifies ITEMIDs
+python step2_extract_vitals.py      # Generates icu_vitals_raw.csv
+python step3_feature_engineering.py # Generates icu_vitals_features.csv
+python step4_create_labels.py       # Generates icu_ml_dataset.csv
+python step5_train_model.py         # Generates icu_rf_model.pkl
+python step6_alert_system.py        # Optional: CLI test
+streamlit run dashboard.py          # Launch web interface
+```
 
 ### Making Changes
 - **Modifying features**: Edit step 3, then rerun steps 3→4→5
 - **Changing labels**: Edit step 4 clinical rules, then rerun steps 4→5
 - **Model tuning**: Edit step 5 hyperparameters, rerun step 5 only
-- **Dashboard UI**: Edit `dashboard.py` and refresh browser
-
-### Testing the Pipeline
-Run all steps in sequence:
-```bash
-python step1_find_vital_ids.py
-python step2_extract_vitals.py
-python step3_feature_engineering.py
-python step4_create_labels.py
-python step5_train_model.py
-python step6_alert_system.py  # Optional: command-line test
-streamlit run dashboard.py     # Launch web interface
-```
+- **Dashboard UI**: Edit `dashboard.py` and save (Streamlit auto-reloads in dev mode)
 
 ## Project-Specific Conventions
 
@@ -165,3 +172,36 @@ The dashboard uses `st.experimental_rerun()` for simulated real-time updates. Th
 - Modify `RandomForestClassifier` hyperparameters in step 5
 - Add time-based features in step 3 (e.g., trend slopes)
 - Revise clinical rules in step 4 to improve label quality
+
+## Troubleshooting
+
+### Dashboard Won't Start
+**Error**: `streamlit run dashboard.py` fails
+- **Check**: Does `icu_rf_model.pkl` exist? Run step 5 first
+- **Check**: Are all dependencies installed? Run `pip install -r requirements.txt`
+- **Fix**: If model is missing, run full pipeline (steps 2-5)
+
+### Empty Output Files
+**Error**: Generated CSVs have 0 rows after merge operations
+- **Check**: MIMIC-III data files in `data/` are not empty
+- **Debug**: Add `print(len(df))` after merge operations in step 2
+- **Cause**: ITEMID mismatch or different MIMIC version - verify ITEMIDs in step 1
+
+### Large File Memory Issues
+**Error**: `MemoryError` when loading CHARTEVENTS.csv
+- **Fix**: `low_memory=False` already used in step 2
+- **Alternative**: Filter CHARTEVENTS by date range before loading
+- **Note**: CHARTEVENTS can be 1-5GB depending on MIMIC-III extract
+
+### Model Performance Issues
+**Symptom**: Classification report shows all zeros or low accuracy
+- **Check**: Class imbalance - count deterioration=1 vs deterioration=0 in icu_ml_dataset.csv
+- **Fix**: Adjust clinical rules in step 4 to balance classes
+- **Note**: Current rules are conservative (high specificity, lower sensitivity)
+
+## Critical Constraints
+
+- **Pipeline Order**: Steps MUST run sequentially - each depends on previous outputs
+- **Feature Contract**: Model expects exactly 4 features in exact order (mean, max, min, count)
+- **ITEMID Sync**: ITEMIDs in step 2 and step 4 must match - changing one requires changing both
+- **No Git Tracking**: CSV artifacts (icu_*.csv) and model files (.pkl) should be gitignored (not committed)
